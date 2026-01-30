@@ -7,6 +7,7 @@ const quotesRoutes = require('./routes/quotes');
 const subscriptionRoutes = require('./routes/subscription');
 const webhookRoutes = require('./routes/webhook');
 const analyticsRoutes = require('./routes/analytics');
+const brandingRoutes = require('./routes/branding');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -63,6 +64,11 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id);
+
+    -- Branding columns for Pro users
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS logo_data TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(7) DEFAULT '#10b981';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS company_display_name VARCHAR(255);
   `;
 
   try {
@@ -82,8 +88,8 @@ app.use(cors({
 // Webhook route needs raw body for Stripe signature verification
 app.use('/api/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
 
-// JSON parsing for other routes
-app.use(express.json());
+// JSON parsing for other routes (increased limit for logo uploads)
+app.use(express.json({ limit: '2mb' }));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -95,6 +101,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/quotes', quotesRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/branding', brandingRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

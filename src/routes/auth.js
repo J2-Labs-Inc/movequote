@@ -104,6 +104,13 @@ router.get('/me', authenticate, async (req, res) => {
       [req.user.id]
     );
     const quoteCount = parseInt(quotesResult.rows[0].count);
+    
+    // Get branding data
+    const brandingResult = await db.query(
+      'SELECT logo_data, brand_color, company_display_name FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const branding = brandingResult.rows[0] || {};
 
     res.json({
       user: {
@@ -113,7 +120,12 @@ router.get('/me', authenticate, async (req, res) => {
         businessName: req.user.business_name,
         subscriptionStatus: req.user.subscription_status,
         quoteCount,
-        quotesRemaining: req.user.subscription_status === 'active' ? 'unlimited' : Math.max(0, 3 - quoteCount)
+        quotesRemaining: req.user.subscription_status === 'active' ? 'unlimited' : Math.max(0, 3 - quoteCount),
+        branding: {
+          logoData: branding.logo_data,
+          brandColor: branding.brand_color || '#10b981',
+          companyDisplayName: branding.company_display_name
+        }
       }
     });
   } catch (err) {
