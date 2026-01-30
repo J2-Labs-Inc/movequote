@@ -46,7 +46,7 @@ router.post('/signup', async (req, res) => {
     });
   } catch (err) {
     console.error('Signup error:', err);
-    res.status(500).json({ error: 'Failed to create account' });
+    res.status(500).json({ error: 'Failed to create account', details: err.message });
   }
 });
 
