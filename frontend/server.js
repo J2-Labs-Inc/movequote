@@ -12,10 +12,7 @@ const server = http.createServer((request, response) => {
   
   return handler(request, response, {
     public: 'public',
-    cleanUrls: [
-      '/app/**',
-      '/!proposal/**'  // Exclude proposal routes from cleanUrls
-    ],
+    cleanUrls: false,  // Disable to prevent redirect conflicts with our custom routing
     directoryListing: false,
     headers: [
       {
