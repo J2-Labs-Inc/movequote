@@ -6,6 +6,43 @@ const { sendQuoteEmail } = require('../services/email');
 const router = express.Router();
 const FREE_QUOTE_LIMIT = 3;
 
+// Helper to convert snake_case DB row to camelCase for frontend
+function toCamelCase(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    _id: row.id, // Alias for frontend compatibility
+    userId: row.user_id,
+    clientName: row.client_name,
+    clientEmail: row.client_email,
+    clientPhone: row.client_phone,
+    propertyType: row.property_type,
+    propertyAddress: row.property_address,
+    serviceType: row.service_type,
+    bedrooms: row.bedrooms,
+    bathrooms: row.bathrooms,
+    squareFeet: row.square_feet,
+    services: row.services,
+    frequency: row.frequency,
+    basePrice: parseFloat(row.base_price) || 0,
+    addonsPrice: parseFloat(row.addons_price) || 0,
+    addonTotal: parseFloat(row.addons_price) || 0, // Alias for frontend
+    discountPercent: parseFloat(row.discount_percent) || 0,
+    discountAmount: parseFloat(row.discount_amount) || 0,
+    taxRate: parseFloat(row.tax_rate) || 0,
+    taxAmount: parseFloat(row.tax_amount) || 0,
+    totalPrice: parseFloat(row.total_price) || 0,
+    total: parseFloat(row.total_price) || 0, // Alias for frontend
+    amount: parseFloat(row.total_price) || 0, // Alias for frontend
+    notes: row.notes,
+    status: row.status,
+    sentAt: row.sent_at,
+    createdAt: row.created_at,
+    date: row.created_at, // Alias for frontend
+    updatedAt: row.updated_at
+  };
+}
+
 // Get all quotes for user
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -13,7 +50,7 @@ router.get('/', authenticate, async (req, res) => {
       `SELECT * FROM quotes WHERE user_id = $1 ORDER BY created_at DESC`,
       [req.user.id]
     );
-    res.json({ quotes: result.rows });
+    res.json({ quotes: result.rows.map(toCamelCase) });
   } catch (err) {
     console.error('Get quotes error:', err);
     res.status(500).json({ error: 'Failed to get quotes' });
@@ -30,7 +67,7 @@ router.get('/:id', authenticate, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Quote not found' });
     }
-    res.json({ quote: result.rows[0] });
+    res.json({ quote: toCamelCase(result.rows[0]) });
   } catch (err) {
     console.error('Get quote error:', err);
     res.status(500).json({ error: 'Failed to get quote' });
@@ -59,28 +96,43 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
 
+    // Accept both frontend naming conventions (camelCase) and backend naming
     const {
       clientName, clientEmail, clientPhone,
-      propertyType, bedrooms, bathrooms, squareFeet,
+      propertyType, propertyAddress,
+      serviceType,
+      bedrooms, bathrooms, squareFeet,
       services, frequency,
-      basePrice, addonsPrice, discountPercent, taxRate, totalPrice,
+      basePrice, 
+      addonsPrice, addonTotal, // Accept either name
+      discountPercent, discountAmount, // Accept either name
+      taxRate, taxAmount, // Accept either name
+      totalPrice, total, // Accept either name
       notes, status
     } = req.body;
+
+    // Use whichever value was provided (prefer the explicit amount fields)
+    const finalAddonsPrice = addonsPrice ?? addonTotal ?? 0;
+    const finalDiscountAmount = discountAmount ?? 0;
+    const finalTaxAmount = taxAmount ?? 0;
+    const finalTotalPrice = totalPrice ?? total ?? 0;
 
     const result = await db.query(
       `INSERT INTO quotes (
         user_id, client_name, client_email, client_phone,
-        property_type, bedrooms, bathrooms, square_feet,
+        property_type, property_address, service_type,
+        bedrooms, bathrooms, square_feet,
         services, frequency,
-        base_price, addons_price, discount_percent, tax_rate, total_price,
+        base_price, addons_price, discount_percent, discount_amount, tax_rate, tax_amount, total_price,
         notes, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *`,
       [
         req.user.id, clientName, clientEmail, clientPhone,
-        propertyType, bedrooms, bathrooms, squareFeet,
+        propertyType, propertyAddress, serviceType,
+        bedrooms, bathrooms, squareFeet,
         JSON.stringify(services || []), frequency,
-        basePrice, addonsPrice, discountPercent, taxRate, totalPrice,
+        basePrice || 0, finalAddonsPrice, discountPercent || 0, finalDiscountAmount, taxRate || 0, finalTaxAmount, finalTotalPrice,
         notes, status || 'draft'
       ]
     );
@@ -93,7 +145,7 @@ router.post('/', authenticate, async (req, res) => {
     const newQuoteCount = parseInt(countResult.rows[0].count);
 
     res.status(201).json({
-      quote: result.rows[0],
+      quote: toCamelCase(result.rows[0]),
       quoteCount: newQuoteCount,
       quotesRemaining: req.user.subscription_status === 'active' ? 'unlimited' : Math.max(0, FREE_QUOTE_LIMIT - newQuoteCount)
     });
@@ -108,11 +160,19 @@ router.put('/:id', authenticate, async (req, res) => {
   try {
     const {
       clientName, clientEmail, clientPhone,
-      propertyType, bedrooms, bathrooms, squareFeet,
+      propertyType, propertyAddress, serviceType,
+      bedrooms, bathrooms, squareFeet,
       services, frequency,
-      basePrice, addonsPrice, discountPercent, taxRate, totalPrice,
+      basePrice, addonsPrice, addonTotal,
+      discountPercent, discountAmount,
+      taxRate, taxAmount,
+      totalPrice, total,
       notes, status
     } = req.body;
+
+    // Use whichever value was provided
+    const finalAddonsPrice = addonsPrice ?? addonTotal;
+    const finalTotalPrice = totalPrice ?? total;
 
     const result = await db.query(
       `UPDATE quotes SET
@@ -120,26 +180,31 @@ router.put('/:id', authenticate, async (req, res) => {
         client_email = COALESCE($2, client_email),
         client_phone = COALESCE($3, client_phone),
         property_type = COALESCE($4, property_type),
-        bedrooms = COALESCE($5, bedrooms),
-        bathrooms = COALESCE($6, bathrooms),
-        square_feet = COALESCE($7, square_feet),
-        services = COALESCE($8, services),
-        frequency = COALESCE($9, frequency),
-        base_price = COALESCE($10, base_price),
-        addons_price = COALESCE($11, addons_price),
-        discount_percent = COALESCE($12, discount_percent),
-        tax_rate = COALESCE($13, tax_rate),
-        total_price = COALESCE($14, total_price),
-        notes = COALESCE($15, notes),
-        status = COALESCE($16, status),
+        property_address = COALESCE($5, property_address),
+        service_type = COALESCE($6, service_type),
+        bedrooms = COALESCE($7, bedrooms),
+        bathrooms = COALESCE($8, bathrooms),
+        square_feet = COALESCE($9, square_feet),
+        services = COALESCE($10, services),
+        frequency = COALESCE($11, frequency),
+        base_price = COALESCE($12, base_price),
+        addons_price = COALESCE($13, addons_price),
+        discount_percent = COALESCE($14, discount_percent),
+        discount_amount = COALESCE($15, discount_amount),
+        tax_rate = COALESCE($16, tax_rate),
+        tax_amount = COALESCE($17, tax_amount),
+        total_price = COALESCE($18, total_price),
+        notes = COALESCE($19, notes),
+        status = COALESCE($20, status),
         updated_at = NOW()
-      WHERE id = $17 AND user_id = $18
+      WHERE id = $21 AND user_id = $22
       RETURNING *`,
       [
         clientName, clientEmail, clientPhone,
-        propertyType, bedrooms, bathrooms, squareFeet,
+        propertyType, propertyAddress, serviceType,
+        bedrooms, bathrooms, squareFeet,
         services ? JSON.stringify(services) : null, frequency,
-        basePrice, addonsPrice, discountPercent, taxRate, totalPrice,
+        basePrice, finalAddonsPrice, discountPercent, discountAmount, taxRate, taxAmount, finalTotalPrice,
         notes, status,
         req.params.id, req.user.id
       ]
@@ -149,7 +214,7 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
-    res.json({ quote: result.rows[0] });
+    res.json({ quote: toCamelCase(result.rows[0]) });
   } catch (err) {
     console.error('Update quote error:', err);
     res.status(500).json({ error: 'Failed to update quote' });
@@ -223,7 +288,7 @@ router.post('/:id/send', authenticate, async (req, res) => {
     res.json({ 
       success: true, 
       message: `Quote sent to ${quote.client_email}`,
-      quote: updateResult.rows[0],
+      quote: toCamelCase(updateResult.rows[0]),
       emailId: emailResult.id
     });
   } catch (err) {

@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS quotes (
   client_email VARCHAR(255),
   client_phone VARCHAR(50),
   property_type VARCHAR(100),
+  property_address TEXT,
+  service_type VARCHAR(100),
   bedrooms INTEGER,
   bathrooms DECIMAL(3,1),
   square_feet INTEGER,
@@ -33,13 +35,41 @@ CREATE TABLE IF NOT EXISTS quotes (
   base_price DECIMAL(10,2),
   addons_price DECIMAL(10,2),
   discount_percent DECIMAL(5,2),
+  discount_amount DECIMAL(10,2),
   tax_rate DECIMAL(5,2),
+  tax_amount DECIMAL(10,2),
   total_price DECIMAL(10,2),
   notes TEXT,
   status VARCHAR(50) DEFAULT 'draft',
+  sent_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Add columns if they don't exist (for existing databases)
+DO $$ 
+BEGIN
+  BEGIN
+    ALTER TABLE quotes ADD COLUMN property_address TEXT;
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE quotes ADD COLUMN service_type VARCHAR(100);
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE quotes ADD COLUMN discount_amount DECIMAL(10,2);
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE quotes ADD COLUMN tax_amount DECIMAL(10,2);
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE quotes ADD COLUMN sent_at TIMESTAMP;
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+END $$;
 
 -- Sessions table for JWT refresh tokens
 CREATE TABLE IF NOT EXISTS sessions (
@@ -74,11 +104,19 @@ async function migrate() {
     console.log('Running migrations...');
     await pool.query(migrations);
     console.log('Migrations complete!');
-    process.exit(0);
+    // Only exit if run directly (not required as module)
+    if (require.main === module) {
+      process.exit(0);
+    }
   } catch (err) {
     console.error('Migration error:', err);
-    process.exit(1);
+    if (require.main === module) {
+      process.exit(1);
+    }
+    throw err;
   }
 }
 
+// Run immediately and export
 migrate();
+module.exports = { migrate };

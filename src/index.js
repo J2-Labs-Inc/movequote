@@ -61,10 +61,22 @@ async function migrate() {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
+    -- Password reset tokens table
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      token_hash VARCHAR(255) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_quotes_user_id ON quotes(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id);
+    CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
 
     -- Branding columns for Pro users
     ALTER TABLE users ADD COLUMN IF NOT EXISTS logo_data TEXT;
@@ -73,6 +85,12 @@ async function migrate() {
 
     -- Email tracking for quotes
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP;
+
+    -- Additional quote columns for full data capture
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS property_address TEXT;
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS service_type VARCHAR(100);
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2);
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2);
   `;
 
   try {
