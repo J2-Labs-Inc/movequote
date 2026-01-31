@@ -436,8 +436,9 @@
         let shareToken = null;
         let quoteData = null;
         
-        // Get share token from URL
+        // Get share token from URL (supports both /proposal/TOKEN and /proposal?id=TOKEN)
         document.addEventListener('DOMContentLoaded', async function() {
+            // Try path first (e.g., /proposal/abc-123)
             const path = window.location.pathname;
             const match = path.match(/\/proposal\/([a-f0-9-]+)/i);
             
@@ -445,7 +446,15 @@
                 shareToken = match[1];
                 await loadProposal();
             } else {
-                showError('Invalid proposal link');
+                // Fallback to query param (e.g., /proposal?id=abc-123)
+                const params = new URLSearchParams(window.location.search);
+                const id = params.get('id') || params.get('token');
+                if (id) {
+                    shareToken = id;
+                    await loadProposal();
+                } else {
+                    showError('Invalid proposal link');
+                }
             }
         });
         
