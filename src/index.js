@@ -70,6 +70,9 @@ async function migrate() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS logo_data TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(7) DEFAULT '#10b981';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS company_display_name VARCHAR(255);
+
+    -- Email tracking for quotes
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP;
   `;
 
   try {

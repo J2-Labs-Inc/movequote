@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { authenticate } = require('../middleware/auth');
+const { sendQuoteEmail } = require('../services/email');
 
 const router = express.Router();
 const FREE_QUOTE_LIMIT = 3;
@@ -171,6 +172,63 @@ router.delete('/:id', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Delete quote error:', err);
     res.status(500).json({ error: 'Failed to delete quote' });
+  }
+});
+
+// Send quote to client via email
+router.post('/:id/send', authenticate, async (req, res) => {
+  try {
+    // Get the quote
+    const quoteResult = await db.query(
+      'SELECT * FROM quotes WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+
+    if (quoteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    const quote = quoteResult.rows[0];
+
+    // Validate client email exists
+    if (!quote.client_email) {
+      return res.status(400).json({ error: 'Client email is required to send quote' });
+    }
+
+    // Get sender (user) info for the email
+    const sender = {
+      email: req.user.email,
+      name: req.user.name,
+      business_name: req.user.business_name,
+      brand_color: req.user.brand_color
+    };
+
+    // Send the email
+    const emailResult = await sendQuoteEmail(quote, sender);
+
+    if (!emailResult.success) {
+      console.error('Failed to send quote email:', emailResult.error);
+      return res.status(500).json({ error: 'Failed to send quote email', details: emailResult.error });
+    }
+
+    // Update quote with sent_at timestamp and status
+    const updateResult = await db.query(
+      `UPDATE quotes 
+       SET sent_at = NOW(), status = 'sent', updated_at = NOW()
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [req.params.id, req.user.id]
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Quote sent to ${quote.client_email}`,
+      quote: updateResult.rows[0],
+      emailId: emailResult.id
+    });
+  } catch (err) {
+    console.error('Send quote error:', err);
+    res.status(500).json({ error: 'Failed to send quote' });
   }
 });
 

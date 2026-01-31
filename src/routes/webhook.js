@@ -1,6 +1,7 @@
 const express = require('express');
 const Stripe = require('stripe');
 const db = require('../db');
+const { sendPaymentConfirmationEmail } = require('../services/email');
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -40,6 +41,29 @@ router.post('/', async (req, res) => {
           [subscriptionId, customerId]
         );
         console.log('Subscription activated for customer:', customerId);
+        
+        // Send payment confirmation email
+        try {
+          const userResult = await db.query(
+            'SELECT email, name FROM users WHERE stripe_customer_id = $1',
+            [customerId]
+          );
+          if (userResult.rows.length > 0) {
+            const user = userResult.rows[0];
+            const amountTotal = session.amount_total ? (session.amount_total / 100) : 29;
+            sendPaymentConfirmationEmail(user, { amount: amountTotal, planName: 'Professional' })
+              .then(result => {
+                if (result.success) {
+                  console.log('Payment confirmation email sent to:', user.email);
+                } else {
+                  console.error('Payment confirmation email failed:', result.error);
+                }
+              })
+              .catch(err => console.error('Payment confirmation email error:', err));
+          }
+        } catch (emailErr) {
+          console.error('Error sending payment confirmation email:', emailErr);
+        }
         break;
       }
 
