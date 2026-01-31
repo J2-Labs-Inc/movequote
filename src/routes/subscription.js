@@ -6,7 +6,9 @@ const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-const PRICE_ID = process.env.STRIPE_PRICE_ID; // $29/month price ID
+// Stripe Price IDs for CleanlyQuote Pro
+const MONTHLY_PRICE_ID = process.env.STRIPE_PRICE_ID || process.env.STRIPE_MONTHLY_PRICE_ID;
+const ANNUAL_PRICE_ID = process.env.STRIPE_ANNUAL_PRICE_ID;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://getcleanlyquote.com';
 
 // Get subscription status
@@ -42,6 +44,15 @@ router.get('/status', authenticate, async (req, res) => {
 // Create checkout session
 router.post('/create-checkout', authenticate, async (req, res) => {
   try {
+    const { interval = 'month' } = req.body; // 'month' or 'year'
+    
+    // Select price based on interval
+    const priceId = interval === 'year' && ANNUAL_PRICE_ID ? ANNUAL_PRICE_ID : MONTHLY_PRICE_ID;
+    
+    if (!priceId) {
+      return res.status(500).json({ error: 'Price not configured' });
+    }
+    
     // Get or create Stripe customer
     let customerId = req.user.stripe_customer_id;
     
@@ -64,14 +75,15 @@ router.post('/create-checkout', authenticate, async (req, res) => {
       customer: customerId,
       payment_method_types: ['card'],
       line_items: [{
-        price: PRICE_ID,
+        price: priceId,
         quantity: 1
       }],
       mode: 'subscription',
       success_url: `${FRONTEND_URL}/app?subscription=success`,
       cancel_url: `${FRONTEND_URL}/app?subscription=cancelled`,
       metadata: {
-        userId: req.user.id
+        userId: req.user.id,
+        interval: interval
       }
     });
 
