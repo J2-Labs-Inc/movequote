@@ -2,20 +2,56 @@
 
 Backend API for CleanlyQuote - Professional Cleaning Estimates SaaS.
 
-## Setup on Railway
+## 🚀 Quick Start
 
-1. Create new project in Railway
-2. Add PostgreSQL database
-3. Deploy this repo
-4. Set environment variables:
-   - `DATABASE_URL` - automatically set by Railway PostgreSQL
-   - `JWT_SECRET` - generate random string
-   - `STRIPE_SECRET_KEY` - from Stripe dashboard
-   - `STRIPE_PRICE_ID` - your $29/month price ID
-   - `STRIPE_WEBHOOK_SECRET` - from Stripe webhook settings
-   - `FRONTEND_URL` - https://getcleanlyquote.com
+This API is designed to run on Railway with PostgreSQL. Database migrations run automatically on startup.
 
-5. Run migration: `npm run db:migrate`
+### Prerequisites
+- Node.js 18+ 
+- PostgreSQL database (Railway provides this)
+- Stripe account for payments
+- Resend account for emails
+
+### Setup on Railway
+
+1. **Create Railway project** with PostgreSQL
+2. **Deploy this repo** - connect your GitHub repo
+3. **Set environment variables** (see below)
+4. **API will auto-migrate** database on first start
+
+### Required Environment Variables
+
+```env
+# Database (automatically set by Railway)
+DATABASE_URL=postgresql://...
+
+# Authentication
+JWT_SECRET=<generate-a-long-random-string>
+
+# Stripe (see STRIPE_SETUP.md for detailed instructions)
+STRIPE_SECRET_KEY=sk_test_... or sk_live_...
+STRIPE_PRICE_ID=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Email Service (optional but recommended)
+RESEND_API_KEY=re_...
+FROM_EMAIL=hello@getcleanlyquote.com
+
+# Frontend
+FRONTEND_URL=https://getcleanlyquote.com
+
+# Port (automatically set by Railway)
+PORT=3000
+```
+
+### Generate JWT Secret
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+## 📖 Stripe Setup
+
+See [STRIPE_SETUP.md](./STRIPE_SETUP.md) for complete Stripe integration instructions.
 
 ## API Endpoints
 
